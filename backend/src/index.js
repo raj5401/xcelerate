@@ -17,6 +17,7 @@ app.use('/api/students', require('./routes/students'))
 app.use('/api/payments', require('./routes/payments'))
 app.use('/api/tests',    require('./routes/tests'))
 app.use('/api/files',    require('./routes/files'))
+app.use('/api/doubts',   require('./routes/doubts'))
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }))

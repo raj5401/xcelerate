@@ -1,17 +1,25 @@
 import { useState, useEffect } from 'react'
-import { ArrowRight, Clock, Users, BookOpen, Lock, CheckCircle, Loader } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, BookOpen, Users, CheckCircle, Loader, ChevronRight } from 'lucide-react'
 import api from '../hooks/useApi'
 import { useAuthStore } from '../store/authStore'
+
+const SUBJECT_META = {
+  Physics:     { emoji: '⚛️', bg: 'bg-blue-50',   border: 'border-blue-200',   badge: 'bg-blue-100 text-blue-700' },
+  Biology:     { emoji: '🧬', bg: 'bg-green-50',  border: 'border-green-200',  badge: 'bg-green-100 text-green-700' },
+  Mathematics: { emoji: '📐', bg: 'bg-purple-50', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
+  Chemistry:   { emoji: '🧪', bg: 'bg-orange-50', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700' },
+}
 
 export default function Courses() {
   const [courses,     setCourses]     = useState([])
   const [enrollments, setEnrollments] = useState([])
   const [loading,     setLoading]     = useState(true)
   const [enrolling,   setEnrolling]   = useState(null)
-  const [active,      setActive]      = useState('All')
-  const { user }                      = useAuthStore()
-  const navigate                      = useNavigate()
+  const [classFilter, setClassFilter] = useState('all')
+  const [subjectFilter, setSubjectFilter] = useState('all')
+  const { user } = useAuthStore()
+  const navigate = useNavigate()
 
   useEffect(() => {
     async function load() {
@@ -21,8 +29,8 @@ export default function Courses() {
           user ? api.get('/courses/my/enrollments') : Promise.resolve({ data: [] })
         ])
         setCourses(c.data)
-        setEnrollments(e.data.map(x => x.id))
-      } catch(err) { console.error(err) }
+        setEnrollments(e.data.map(x => x.course_id || x.id))
+      } catch (err) { console.error(err) }
       finally { setLoading(false) }
     }
     load()
@@ -34,106 +42,186 @@ export default function Courses() {
     try {
       await api.post('/courses/enroll', { course_id: courseId })
       setEnrollments(e => [...e, courseId])
-      navigate('/dashboard')
-    } catch(err) {
-      alert(err.response?.data?.message || 'Enrollment failed')
+    } catch (err) {
+      if (err.response?.data?.message === 'Already enrolled') {
+        setEnrollments(e => [...e, courseId])
+      } else {
+        alert(err.response?.data?.message || 'Enrollment failed')
+      }
     } finally { setEnrolling(null) }
   }
 
-  const tabs    = ['All', 'JEE', 'NEET', 'KCET', 'Boards', 'Crash']
-  const filtered = active === 'All' ? courses : courses.filter(c => c.exam === active)
+  const subjects = ['all', 'Physics', 'Biology', 'Mathematics', 'Chemistry']
+
+  const filtered = courses.filter(c => {
+    const classOk   = classFilter   === 'all' || c.class_level === classFilter
+    const subjectOk = subjectFilter === 'all' || c.subject === subjectFilter
+    return classOk && subjectOk
+  })
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[400px]">
-      <Loader size={24} className="animate-spin text-brand-500" />
+      <Loader size={24} className="animate-spin text-indigo-500" />
     </div>
   )
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-12">
-      <h1 className="text-3xl font-display font-semibold text-stone-900 mb-2">All courses</h1>
-      <p className="text-stone-500 mb-8">Choose your exam and batch. Live classes start June 2026.</p>
 
-      {/* Filter tabs */}
-      <div className="flex gap-2 flex-wrap mb-8">
-        {tabs.map(t => (
-          <button key={t} onClick={() => setActive(t)}
-            className={`text-sm px-4 py-1.5 rounded-full border transition-colors ${
-              active === t
-                ? 'bg-brand-500 text-white border-brand-500'
-                : 'border-stone-200 text-stone-600 hover:border-stone-300 bg-white'
-            }`}>{t}</button>
-        ))}
+      {/* Header */}
+      <div className="mb-10">
+        <h1 className="text-3xl font-display font-bold text-stone-900 mb-2">All Courses</h1>
+        <p className="text-stone-500">PUC 11 & 12 — Physics, Biology, Mathematics, Chemistry</p>
       </div>
 
-      {/* Course cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 mb-8">
+        {/* Class filter */}
+        <div>
+          <p className="text-xs text-stone-400 font-medium mb-2 uppercase tracking-wide">Class</p>
+          <div className="flex gap-2">
+            {[['all', 'All Classes'], ['11', 'PUC 11'], ['12', 'PUC 12']].map(([val, label]) => (
+              <button key={val} onClick={() => setClassFilter(val)}
+                className={`text-sm px-4 py-1.5 rounded-full border transition-colors font-medium ${
+                  classFilter === val
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'border-stone-200 text-stone-600 hover:border-indigo-300 bg-white'
+                }`}>{label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Subject filter */}
+        <div>
+          <p className="text-xs text-stone-400 font-medium mb-2 uppercase tracking-wide">Subject</p>
+          <div className="flex gap-2 flex-wrap">
+            {subjects.map(s => {
+              const meta = SUBJECT_META[s]
+              return (
+                <button key={s} onClick={() => setSubjectFilter(s)}
+                  className={`text-sm px-4 py-1.5 rounded-full border transition-colors font-medium ${
+                    subjectFilter === s
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'border-stone-200 text-stone-600 hover:border-indigo-300 bg-white'
+                  }`}>
+                  {meta ? `${meta.emoji} ${s}` : 'All Subjects'}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Results count */}
+      <p className="text-sm text-stone-400 mb-6">{filtered.length} courses found</p>
+
+      {/* Course grid */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtered.map(c => {
+          const meta     = SUBJECT_META[c.subject] || {}
           const enrolled = enrollments.includes(c.id)
           return (
-            <div key={c.id} className={`bg-white border rounded-2xl p-5 hover:shadow-md transition-all ${
-              enrolled ? 'border-green-200 bg-green-50/30' : 'border-stone-100'
+            <div key={c.id} className={`border-2 rounded-2xl overflow-hidden hover:shadow-lg transition-all ${
+              enrolled ? 'border-green-300' : (meta.border || 'border-stone-200')
             }`}>
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-xs bg-brand-50 text-brand-600 border border-brand-100 px-2 py-0.5 rounded-full font-medium">
-                  {c.exam}
+              {/* Card header */}
+              <div className={`p-5 ${meta.bg || 'bg-stone-50'}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-3xl">{meta.emoji}</span>
+                  {enrolled && (
+                    <span className="flex items-center gap-1 text-xs text-green-600 font-semibold bg-green-100 px-2 py-1 rounded-full">
+                      <CheckCircle size={11} /> Enrolled
+                    </span>
+                  )}
+                </div>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${meta.badge}`}>
+                  {c.subject} · PUC {c.class_level}
                 </span>
-                {enrolled && (
-                  <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                    <CheckCircle size={12}/> Enrolled
-                  </span>
-                )}
+                <h3 className="font-display font-bold text-stone-800 mt-2 text-lg leading-tight">{c.title}</h3>
               </div>
 
-              <h3 className="font-display font-semibold text-stone-800 mb-1 leading-snug">{c.title}</h3>
-              <p className="text-xs text-stone-400 mb-4">{c.batch_class}</p>
+              {/* Card body */}
+              <div className="p-5 bg-white">
+                <p className="text-xs text-stone-500 mb-4 line-clamp-2">{c.description}</p>
 
-              <div className="flex gap-4 text-xs text-stone-400 mb-5">
-                <span className="flex items-center gap-1"><Clock size={11}/> 10 months</span>
-                <span className="flex items-center gap-1"><Users size={11}/> {c.enrolled || 0} students</span>
-                <span className="flex items-center gap-1"><BookOpen size={11}/> {c.chapters} chapters</span>
-              </div>
-
-              {/* What's included */}
-              <div className="bg-stone-50 rounded-xl p-3 mb-4 space-y-1.5">
-                {['Live classes on Google Meet','Handwritten PDF notes','Mock tests + PYQs','WhatsApp doubt support'].map(f => (
-                  <div key={f} className="flex items-center gap-2 text-xs text-stone-500">
-                    <CheckCircle size={11} className="text-green-500 flex-shrink-0"/> {f}
+                {/* Teacher */}
+                <div className="flex items-center gap-2 mb-4 pb-4 border-b border-stone-100">
+                  <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
+                    {c.teacher_name?.split(' ').slice(-1)[0]?.[0]}
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <p className="text-xs font-semibold text-stone-700">{c.teacher_name}</p>
+                    <p className="text-xs text-stone-400">{c.teacher_subject} Teacher</p>
+                  </div>
+                </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-display font-bold text-stone-800">
-                  ₹{Number(c.price).toLocaleString()}
-                  <span className="text-xs font-normal text-stone-400 ml-1">/course</span>
-                </span>
-                {enrolled ? (
-                  <span className="text-xs bg-green-100 text-green-700 px-3 py-2 rounded-xl font-medium">
-                    ✓ Enrolled
+                {/* Stats */}
+                <div className="flex gap-4 text-xs text-stone-400 mb-5">
+                  <span className="flex items-center gap-1">
+                    <BookOpen size={11} /> {c.total_chapters} chapters
                   </span>
-                ) : (
-                  <button
-                    onClick={() => enroll(c.id)}
-                    disabled={enrolling === c.id}
-                    className="bg-stone-900 hover:bg-brand-500 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors disabled:opacity-60 flex items-center gap-1"
-                  >
-                    {enrolling === c.id ? 'Enrolling...' : <><Lock size={11}/> Enroll now</>}
-                  </button>
-                )}
+                  <span className="flex items-center gap-1">
+                    <Users size={11} /> {c.enrolled_count || 0} students
+                  </span>
+                </div>
+
+                {/* Includes */}
+                <div className="space-y-1.5 mb-5">
+                  {['Live Google Meet classes', 'Chapter-wise notes', 'Mock tests', 'Doubt support'].map(f => (
+                    <div key={f} className="flex items-center gap-1.5 text-xs text-stone-500">
+                      <CheckCircle size={10} className="text-green-500 flex-shrink-0" /> {f}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Price + action */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xl font-display font-bold text-stone-900">
+                      ₹{Number(c.price).toLocaleString()}
+                    </span>
+                    <span className="text-xs text-stone-400 ml-1">/ course</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Link to={`/courses/${c.id}`}
+                      className="text-xs border border-stone-200 text-stone-600 px-3 py-2 rounded-xl hover:border-indigo-300 hover:text-indigo-600 transition-colors">
+                      Details
+                    </Link>
+                    {enrolled ? (
+                      <Link to="/dashboard"
+                        className="text-xs bg-green-600 text-white px-3 py-2 rounded-xl hover:bg-green-700 transition-colors font-medium">
+                        Go to course
+                      </Link>
+                    ) : (
+                      <button onClick={() => enroll(c.id)} disabled={enrolling === c.id}
+                        className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition-colors font-medium disabled:opacity-60">
+                        {enrolling === c.id ? 'Enrolling...' : 'Enroll free'}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )
         })}
       </div>
 
+      {filtered.length === 0 && (
+        <div className="text-center py-16 text-stone-400">
+          <p className="text-lg mb-2">No courses found</p>
+          <p className="text-sm">Try changing the filters</p>
+        </div>
+      )}
+
+      {/* Guest CTA */}
       {!user && (
-        <div className="mt-8 bg-brand-50 border border-brand-100 rounded-2xl p-6 text-center">
-          <p className="text-stone-700 font-medium mb-2">Create a free account to enroll</p>
-          <p className="text-stone-500 text-sm mb-4">Registration takes 2 minutes. OTP verification included.</p>
-          <a href="/login" className="inline-flex items-center gap-2 bg-brand-500 text-white font-medium px-5 py-2.5 rounded-xl hover:bg-brand-600 text-sm">
-            Create account <ArrowRight size={14}/>
-          </a>
+        <div className="mt-10 bg-indigo-50 border border-indigo-100 rounded-2xl p-8 text-center">
+          <h3 className="text-lg font-display font-bold text-stone-800 mb-2">Create a free account to enroll</h3>
+          <p className="text-stone-500 text-sm mb-5">Register in 2 minutes with OTP verification</p>
+          <Link to="/login"
+            className="inline-flex items-center gap-2 bg-indigo-600 text-white font-semibold px-6 py-3 rounded-xl hover:bg-indigo-700 transition-colors">
+            Get started <ArrowRight size={15} />
+          </Link>
         </div>
       )}
     </div>

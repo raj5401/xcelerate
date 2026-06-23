@@ -3,6 +3,7 @@ import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Home from './pages/Home'
 import Courses from './pages/Courses'
+import CourseDetail from './pages/CourseDetail'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 
@@ -42,7 +43,8 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/"        element={<StudentLayout><Home /></StudentLayout>} />
-        <Route path="/courses" element={<StudentLayout><Courses /></StudentLayout>} />
+        <Route path="/courses"    element={<StudentLayout><Courses /></StudentLayout>} />
+        <Route path="/courses/:id" element={<StudentLayout><CourseDetail /></StudentLayout>} />
         <Route path="/login"   element={<Login />} />
         <Route path="/dashboard" element={<StudentLayout><Dashboard /></StudentLayout>} />
 

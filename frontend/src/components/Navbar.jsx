@@ -7,7 +7,6 @@ const links = [
   { label: 'Courses',    to: '/courses' },
   { label: 'Mock Tests', to: '/mock-tests' },
   { label: 'Live Exams', to: '/live-exams' },
-  { label: 'About',      to: '/about' },
 ]
 
 export default function Navbar() {
@@ -23,9 +22,9 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
           <span className="font-display text-2xl font-bold tracking-tight">
-            <span className="text-brand-500">X</span><span className="text-stone-900">celerate</span>
+            <span className="text-indigo-600">X</span><span className="text-stone-900">celerate</span>
           </span>
-          <span className="text-sm text-stone-400 font-medium hidden sm:block border-l border-stone-200 pl-2">Physics</span>
+          <span className="text-xs text-stone-400 font-medium hidden sm:block border-l border-stone-200 pl-2">PUC 11 & 12</span>
         </Link>
 
         {/* Desktop nav */}
@@ -69,6 +68,12 @@ export default function Navbar() {
                       <Link to="/admin" onClick={() => setDropdown(false)}
                         className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-stone-600 hover:bg-stone-50">
                         <User size={14} /> Admin panel
+                      </Link>
+                    )}
+                    {user.role === 'teacher' && (
+                      <Link to="/teacher" onClick={() => setDropdown(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-stone-600 hover:bg-stone-50">
+                        <User size={14} /> Teacher panel
                       </Link>
                     )}
                     <button onClick={() => { setDropdown(false); logout() }}

@@ -30,20 +30,28 @@ const uploadVideo = multer({ storage: storage('videos'), limits: { fileSize: 2 *
 // GET /api/files/notes — student (enrolled) or admin
 router.get('/notes', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id,title,batch_name,size_kb,downloads,created_at FROM notes ORDER BY created_at DESC')
+    const result = await pool.query(`
+      SELECT n.id, n.title, n.course_id, n.chapter_id, n.size_kb, n.downloads, n.created_at,
+        c.title as course_title, c.subject,
+        ch.title as chapter_title
+      FROM notes n
+      LEFT JOIN courses c ON c.id = n.course_id
+      LEFT JOIN chapters ch ON ch.id = n.chapter_id
+      ORDER BY n.created_at DESC
+    `)
     res.json(result.rows)
   } catch (err) { res.status(500).json({ message: 'Server error' }) }
 })
 
-// POST /api/files/notes/upload — admin
-router.post('/notes/upload', auth, adminOnly, uploadNote.single('file'), async (req, res) => {
+// POST /api/files/notes/upload — admin/teacher
+router.post('/notes/upload', auth, uploadNote.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'File required' })
-  const { title, batch_name, batch_id } = req.body
+  const { title, course_id, chapter_id } = req.body
   const size_kb = Math.round(req.file.size / 1024)
   try {
     const result = await pool.query(
-      'INSERT INTO notes (title,batch_id,batch_name,filename,size_kb) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [title || req.file.originalname, batch_id || null, batch_name || '', req.file.filename, size_kb]
+      'INSERT INTO notes (title,course_id,chapter_id,teacher_id,filename,size_kb) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [title || req.file.originalname, course_id || null, chapter_id || null, req.user.id, req.file.filename, size_kb]
     )
     res.status(201).json(result.rows[0])
   } catch (err) { res.status(500).json({ message: 'Server error' }) }

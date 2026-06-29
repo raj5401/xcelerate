@@ -1,61 +1,113 @@
 const router = require('express').Router()
 const { pool } = require('../db')
 const { auth } = require('../middleware/auth')
+const { asyncHandler } = require('../middleware/errorHandler')
+const { sendNotification } = require('../utils/emailService')
 
-// GET /api/doubts?course_id=&chapter_id=
-router.get('/', auth, async (req, res) => {
-  const { course_id, chapter_id } = req.query
-  try {
-    const result = await pool.query(`
-      SELECT d.*,
-        u.name as student_name,
-        a.name as answered_by_name
-      FROM doubts d
-      JOIN users u ON u.id = d.user_id
-      LEFT JOIN users a ON a.id = d.answered_by
-      WHERE ($1::int IS NULL OR d.course_id = $1)
-        AND ($2::int IS NULL OR d.chapter_id = $2)
-      ORDER BY d.created_at DESC
-    `, [course_id || null, chapter_id || null])
-    res.json(result.rows)
-  } catch (err) { res.status(500).json({ message: 'Server error' }) }
-})
+// GET /api/doubts
+router.get('/', asyncHandler(async (req, res) => {
+  const { course_id, status, search, page = 1, limit = 10 } = req.query
+  let query = `SELECT d.*, u.name as student_name, u.avatar_url, c.title as course_title,
+    COUNT(dr.id) as reply_count FROM doubts d
+    JOIN users u ON u.id = d.user_id
+    JOIN courses c ON c.id = d.course_id
+    LEFT JOIN doubt_replies dr ON dr.doubt_id = d.id
+    WHERE 1=1`
+  const params = []
 
-// POST /api/doubts — student asks
-router.post('/', auth, async (req, res) => {
-  const { course_id, chapter_id, question } = req.body
-  if (!course_id || !question) return res.status(400).json({ message: 'course_id and question required' })
-  try {
-    const result = await pool.query(
-      'INSERT INTO doubts (course_id,chapter_id,user_id,question) VALUES ($1,$2,$3,$4) RETURNING *',
-      [course_id, chapter_id || null, req.user.id, question]
-    )
-    res.status(201).json(result.rows[0])
-  } catch (err) { res.status(500).json({ message: 'Server error' }) }
-})
+  if (course_id) {
+    query += ` AND d.course_id = $${params.length + 1}`
+    params.push(course_id)
+  }
+  if (status) {
+    query += ` AND d.status = $${params.length + 1}`
+    params.push(status)
+  }
+  if (search) {
+    query += ` AND (d.title ILIKE $${params.length + 1} OR d.question ILIKE $${params.length + 1})`
+    params.push(`%${search}%`, `%${search}%`)
+  }
 
-// PATCH /api/doubts/:id/answer — teacher answers
-router.patch('/:id/answer', auth, async (req, res) => {
-  if (req.user.role !== 'teacher' && req.user.role !== 'admin')
-    return res.status(403).json({ message: 'Only teachers can answer doubts' })
-  const { answer } = req.body
-  if (!answer) return res.status(400).json({ message: 'Answer required' })
-  try {
-    const result = await pool.query(
-      `UPDATE doubts SET answer=$1, answered_by=$2, answered_at=NOW(), status='answered'
-       WHERE id=$3 RETURNING *`,
-      [answer, req.user.id, req.params.id]
-    )
-    res.json(result.rows[0])
-  } catch (err) { res.status(500).json({ message: 'Server error' }) }
-})
+  query += ` GROUP BY d.id, u.name, u.avatar_url, c.title
+    ORDER BY d.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
+  params.push(limit, (page - 1) * limit)
 
-// DELETE /api/doubts/:id
-router.delete('/:id', auth, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM doubts WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id])
-    res.json({ message: 'Doubt deleted' })
-  } catch (err) { res.status(500).json({ message: 'Server error' }) }
-})
+  const doubts = await pool.query(query, params)
+  res.json({ success: true, doubts: doubts.rows, page, limit })
+}))
+
+// GET /api/doubts/:id
+router.get('/:id', asyncHandler(async (req, res) => {
+  const doubt = await pool.query(
+    `SELECT d.*, u.name as student_name, u.avatar_url, c.title as course_title
+     FROM doubts d
+     JOIN users u ON u.id = d.user_id
+     JOIN courses c ON c.id = d.course_id
+     WHERE d.id=$1`,
+    [req.params.id]
+  )
+  if (!doubt.rows.length) return res.status(404).json({ success: false, message: 'Doubt not found' })
+
+  const replies = await pool.query(
+    `SELECT dr.*, u.name as reply_author, u.avatar_url, u.role
+     FROM doubt_replies dr
+     JOIN users u ON u.id = dr.user_id
+     WHERE dr.doubt_id=$1
+     ORDER BY dr.created_at ASC`,
+    [req.params.id]
+  )
+
+  res.json({ success: true, doubt: doubt.rows[0], replies: replies.rows })
+}))
+
+// POST /api/doubts (Create doubt)
+router.post('/', auth, asyncHandler(async (req, res) => {
+  const { course_id, chapter_id, title, question, image_url, tags } = req.body
+  if (!course_id || !title || !question) {
+    return res.status(400).json({ success: false, message: 'course_id, title, and question required' })
+  }
+
+  const result = await pool.query(
+    `INSERT INTO doubts (course_id, chapter_id, user_id, title, question, image_url, tags, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [course_id, chapter_id || null, req.user.id, title, question, image_url || null, tags ? JSON.stringify(tags) : null, 'open']
+  )
+
+  res.status(201).json({ success: true, message: 'Doubt posted', doubt: result.rows[0] })
+}))
+
+// POST /api/doubts/:id/replies (Add reply)
+router.post('/:id/replies', auth, asyncHandler(async (req, res) => {
+  const { reply_text, image_url } = req.body
+  if (!reply_text) return res.status(400).json({ success: false, message: 'reply_text required' })
+
+  const result = await pool.query(
+    `INSERT INTO doubt_replies (doubt_id, user_id, reply_text, image_url, is_teacher_reply)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [req.params.id, req.user.id, reply_text, image_url || null, req.user.role === 'teacher']
+  )
+
+  // Update doubt status if teacher replies
+  if (req.user.role === 'teacher') {
+    await pool.query('UPDATE doubts SET status=$1 WHERE id=$2', ['answered', req.params.id])
+  }
+
+  res.status(201).json({ success: true, message: 'Reply posted', reply: result.rows[0] })
+}))
+
+// PATCH /api/doubts/:id/status
+router.patch('/:id/status', auth, asyncHandler(async (req, res) => {
+  const { status } = req.body
+  if (!['open', 'answered', 'resolved'].includes(status)) {
+    return res.status(400).json({ success: false, message: 'Invalid status' })
+  }
+
+  const result = await pool.query(
+    'UPDATE doubts SET status=$1 WHERE id=$2 RETURNING *',
+    [status, req.params.id]
+  )
+
+  res.json({ success: true, message: 'Doubt status updated', doubt: result.rows[0] })
+}))
 
 module.exports = router

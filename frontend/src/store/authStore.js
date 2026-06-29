@@ -1,31 +1,62 @@
 import { create } from 'zustand'
-import api from '../hooks/useApi'
+import api from '../utils/api'
 
-export const useAuthStore = create((set) => ({
-  token: localStorage.getItem('token') || null,
-  user:  JSON.parse(localStorage.getItem('user') || 'null'),
+const useAuthStore = create((set, get) => ({
+  user: null,
+  token: null,
+  isLoading: false,
+  error: null,
+
+  setUser: (user) => set({ user }),
+  setToken: (token) => set({ token }),
 
   login: async (email, password) => {
-    const res = await api.post('/auth/login', { email, password })
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('user', JSON.stringify(res.data.user))
-    set({ token: res.data.token, user: res.data.user })
-    return res.data.user
+    set({ isLoading: true, error: null })
+    try {
+      const { data } = await api.post('/auth/login', { email, password })
+      set({ user: data.user, token: data.token })
+      localStorage.setItem('token', data.token)
+      localStorage.setItem('user', JSON.stringify(data.user))
+      return data
+    } catch (err) {
+      const message = err.response?.data?.message || 'Login failed'
+      set({ error: message })
+      throw err
+    } finally {
+      set({ isLoading: false })
+    }
   },
 
-  register: async (name, email, phone, password) => {
-    const res = await api.post('/auth/register', { name, email, phone, password })
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('user', JSON.stringify(res.data.user))
-    set({ token: res.data.token, user: res.data.user })
-    return res.data.user
+  register: async (formData) => {
+    set({ isLoading: true, error: null })
+    try {
+      const { data } = await api.post('/auth/register', formData)
+      set({ user: data.user, token: data.token })
+      localStorage.setItem('token', data.token)
+      localStorage.setItem('user', JSON.stringify(data.user))
+      return data
+    } catch (err) {
+      const message = err.response?.data?.message || 'Registration failed'
+      set({ error: message })
+      throw err
+    } finally {
+      set({ isLoading: false })
+    }
   },
 
   logout: () => {
+    set({ user: null, token: null })
     localStorage.removeItem('token')
-    localStorage.removeItem('adminToken')
     localStorage.removeItem('user')
-    set({ token: null, user: null })
-    window.location.href = '/login'
+  },
+
+  loadFromStorage: () => {
+    const token = localStorage.getItem('token')
+    const user = localStorage.getItem('user')
+    if (token && user) {
+      set({ token, user: JSON.parse(user) })
+    }
   },
 }))
+
+export default useAuthStore

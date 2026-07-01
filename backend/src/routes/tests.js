@@ -211,10 +211,10 @@ router.post('/:id/submit', auth, async (req, res) => {
       [req.params.id]
     )
 
-    let score    = 0
-    let correct  = 0
-    let wrong    = 0
-    let skipped  = 0
+    let score   = 0
+    let correct = 0
+    let wrong   = 0
+    let skipped = 0
 
     for (const q of questions.rows) {
       const ans = answers[q.id]
@@ -227,7 +227,7 @@ router.post('/:id/submit', auth, async (req, res) => {
         wrong++
       }
     }
-    score = Math.max(0, score) // floor at 0
+    score = Math.max(0, score)
 
     const result = await pool.query(
       `INSERT INTO attempts (test_id,user_id,answers,score,status,submitted_at)
@@ -254,29 +254,46 @@ router.get('/:id/results', auth, async (req, res) => {
       return res.status(403).json({ message: 'Results not published yet.', not_published: true })
     }
 
+    // Tiebreaker: 1st by score DESC, 2nd by wrong answers ASC, 3rd by submitted_at ASC
     const result = await pool.query(`
-      SELECT
-        u.name, u.email,
-        a.score, a.answers, a.submitted_at,
-        RANK() OVER (ORDER BY a.score DESC) as rank,
-        t.total_marks,
-        t.title as test_title,
-        (SELECT COUNT(*) FROM questions WHERE test_id=t.id) as total_questions,
-        (
-          SELECT COUNT(*) FROM (
-            SELECT q.id, q.correct,
-              (a.answers->>q.id::text) as given
-            FROM questions q
+      WITH scored AS (
+        SELECT
+          a.id, a.user_id, a.score, a.answers, a.submitted_at,
+          t.total_marks, t.title as test_title,
+          (SELECT COUNT(*) FROM questions WHERE test_id = t.id) as total_questions,
+          -- Count correct answers
+          (SELECT COUNT(*) FROM questions q
             WHERE q.test_id = t.id
-              AND (a.answers->>q.id::text) IS NOT NULL
-          ) sub
-        ) as attempted
-      FROM attempts a
-      JOIN users u ON u.id = a.user_id
-      JOIN tests t ON t.id = a.test_id
-      WHERE a.test_id=$1 AND a.status='submitted'
-      ORDER BY a.score DESC
+            AND (a.answers->>q.id::text) = q.correct
+          ) as correct_count,
+          -- Count wrong answers (for tiebreaker)
+          (SELECT COUNT(*) FROM questions q
+            WHERE q.test_id = t.id
+            AND (a.answers->>q.id::text) IS NOT NULL
+            AND (a.answers->>q.id::text) != q.correct
+          ) as wrong_count,
+          -- Count attempted
+          (SELECT COUNT(*) FROM questions q
+            WHERE q.test_id = t.id
+            AND (a.answers->>q.id::text) IS NOT NULL
+          ) as attempted
+        FROM attempts a
+        JOIN tests t ON t.id = a.test_id
+        WHERE a.test_id = $1 AND a.status = 'submitted'
+      )
+      SELECT
+        s.*,
+        u.name, u.email,
+        RANK() OVER (
+          ORDER BY s.score DESC,
+                   s.wrong_count ASC,
+                   s.submitted_at ASC
+        ) as rank
+      FROM scored s
+      JOIN users u ON u.id = s.user_id
+      ORDER BY s.score DESC, s.wrong_count ASC, s.submitted_at ASC
     `, [req.params.id])
+
     res.json(result.rows)
   } catch(err) {
     console.error(err)

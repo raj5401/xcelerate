@@ -60,9 +60,13 @@ export default function Login() {
     if (!validateForm()) return
     setLoading(true)
     try {
-      await api.post('/otp/send', { email: form.email, name: form.name })
+      const res = await api.post('/otp/send', { email: form.email, name: form.name })
       setStep('otp')
       setOtpSent(true)
+      // Dev mode: auto-fill OTP
+      if (res.data.dev_otp) {
+        setOtp(res.data.dev_otp)
+      }
       // 60 second resend timer
       setResendTimer(60)
       const interval = setInterval(() => {

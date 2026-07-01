@@ -25,12 +25,19 @@ router.post('/send', async (req, res) => {
   const expires = new Date(Date.now() + 10 * 60 * 1000) // 10 mins
 
   try {
-    // Invalidate old OTPs
     await pool.query('UPDATE otps SET used=true WHERE email=$1', [email])
     await pool.query(
       'INSERT INTO otps (email, otp, expires_at) VALUES ($1,$2,$3)',
       [email, otp, expires]
     )
+
+    // DEV MODE: if no SMTP credentials, skip email and return OTP directly
+    const devMode = !process.env.SMTP_USER || !process.env.SMTP_PASS
+
+    if (devMode) {
+      console.log(`[DEV] OTP for ${email}: ${otp}`)
+      return res.json({ message: 'OTP sent', dev_otp: otp })
+    }
 
     await transporter.sendMail({
       from:    `"Xcelerate" <${process.env.SMTP_USER}>`,

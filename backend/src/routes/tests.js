@@ -85,30 +85,34 @@ async function getAdminTests(req, res) {
 }
 
 // POST /api/tests
-router.post('/', auth, adminOnly, async (req, res) => {
-  const { title, exam, batch_class, duration, total_marks, scheduled_at } = req.body
+router.post('/', auth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'teacher')
+    return res.status(403).json({ message: 'Access denied' })
+  const { title, course_id, subject, class_level, duration, total_marks, scheduled_at } = req.body
   if (!title || !duration || !total_marks)
     return res.status(400).json({ message: 'Title, duration and marks required' })
   try {
     const result = await pool.query(
-      'INSERT INTO tests (title,exam,batch_class,duration,total_marks,scheduled_at) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [title, exam, batch_class, duration, total_marks, scheduled_at || null]
+      'INSERT INTO tests (title,course_id,teacher_id,subject,class_level,duration,total_marks,scheduled_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      [title, course_id || null, req.user.id, subject || null, class_level || null, duration, total_marks, scheduled_at || null]
     )
     res.status(201).json(result.rows[0])
   } catch(err) { res.status(500).json({ message: 'Server error' }) }
 })
 
-// PATCH /api/tests/:id — update test (including reschedule)
-router.patch('/:id', auth, adminOnly, async (req, res) => {
-  const { title, exam, batch_class, duration, total_marks, scheduled_at } = req.body
+// PATCH /api/tests/:id — update test (admin or teacher who owns it)
+router.patch('/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'teacher')
+    return res.status(403).json({ message: 'Access denied' })
+  const { title, subject, class_level, duration, total_marks, scheduled_at } = req.body
   try {
     const result = await pool.query(
       `UPDATE tests SET
-        title=COALESCE($1,title), exam=COALESCE($2,exam),
-        batch_class=COALESCE($3,batch_class), duration=COALESCE($4,duration),
+        title=COALESCE($1,title), subject=COALESCE($2,subject),
+        class_level=COALESCE($3,class_level), duration=COALESCE($4,duration),
         total_marks=COALESCE($5,total_marks), scheduled_at=$6
        WHERE id=$7 RETURNING *`,
-      [title, exam, batch_class, duration, total_marks, scheduled_at || null, req.params.id]
+      [title, subject, class_level, duration, total_marks, scheduled_at || null, req.params.id]
     )
     res.json(result.rows[0])
   } catch(err) { res.status(500).json({ message: 'Server error' }) }

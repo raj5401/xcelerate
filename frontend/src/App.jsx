@@ -27,6 +27,15 @@ import AdminVideos   from './pages/admin/AdminVideos'
 import AdminNotes    from './pages/admin/AdminNotes'
 import AdminPayments from './pages/admin/AdminPayments'
 
+// Teacher
+import TeacherLayout   from './components/teacher/TeacherLayout'
+import TeacherOverview from './pages/teacher/TeacherOverview'
+import TeacherCourses  from './pages/teacher/TeacherCourses'
+import TeacherTests    from './pages/teacher/TeacherTests'
+import TeacherNotes    from './pages/teacher/TeacherNotes'
+import TeacherDoubts   from './pages/teacher/TeacherDoubts'
+import TeacherStudents from './pages/teacher/TeacherStudents'
+
 function StudentLayout({ children }) {
   return (
     <>
@@ -66,6 +75,14 @@ export default function App() {
         <Route path="/admin/videos"   element={<AdminLayout><AdminVideos /></AdminLayout>} />
         <Route path="/admin/notes"    element={<AdminLayout><AdminNotes /></AdminLayout>} />
         <Route path="/admin/payments" element={<AdminLayout><AdminPayments /></AdminLayout>} />
+
+        {/* Teacher */}
+        <Route path="/teacher"          element={<TeacherLayout><TeacherOverview /></TeacherLayout>} />
+        <Route path="/teacher/courses"  element={<TeacherLayout><TeacherCourses /></TeacherLayout>} />
+        <Route path="/teacher/tests"    element={<TeacherLayout><TeacherTests /></TeacherLayout>} />
+        <Route path="/teacher/notes"    element={<TeacherLayout><TeacherNotes /></TeacherLayout>} />
+        <Route path="/teacher/doubts"   element={<TeacherLayout><TeacherDoubts /></TeacherLayout>} />
+        <Route path="/teacher/students" element={<TeacherLayout><TeacherStudents /></TeacherLayout>} />
       </Routes>
     </BrowserRouter>
   )

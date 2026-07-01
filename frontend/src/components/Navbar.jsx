@@ -6,7 +6,6 @@ import { useAuthStore } from '../store/authStore'
 const links = [
   { label: 'Courses',    to: '/courses' },
   { label: 'Mock Tests', to: '/mock-tests' },
-  { label: 'Live Exams', to: '/live-exams' },
 ]
 
 export default function Navbar() {

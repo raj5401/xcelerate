@@ -40,10 +40,14 @@ router.post('/', auth, adminOnly, async (req, res) => {
   }
 })
 
-// PATCH /api/students/:id — admin toggle status
+// PATCH /api/students/:id — admin toggle status or reset password
 router.patch('/:id', auth, adminOnly, async (req, res) => {
-  const { status, name, phone } = req.body
+  const { status, name, phone, password } = req.body
   try {
+    if (password) {
+      const hash = await bcrypt.hash(password, 10)
+      await pool.query('UPDATE users SET password=$1 WHERE id=$2', [hash, req.params.id])
+    }
     const result = await pool.query(
       'UPDATE users SET status=COALESCE($1,status), name=COALESCE($2,name), phone=COALESCE($3,phone) WHERE id=$4 RETURNING id,name,email,phone,status',
       [status, name, phone, req.params.id]

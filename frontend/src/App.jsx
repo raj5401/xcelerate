@@ -26,6 +26,7 @@ import AdminTestSubmissions from './pages/admin/AdminTestSubmissions'
 import AdminVideos   from './pages/admin/AdminVideos'
 import AdminNotes    from './pages/admin/AdminNotes'
 import AdminPayments from './pages/admin/AdminPayments'
+import AdminSettings from './pages/admin/AdminSettings'
 
 // Teacher
 import TeacherLayout   from './components/teacher/TeacherLayout'
@@ -74,7 +75,8 @@ export default function App() {
         <Route path="/admin/tests/:id/submissions" element={<AdminLayout><AdminTestSubmissions /></AdminLayout>} />
         <Route path="/admin/videos"   element={<AdminLayout><AdminVideos /></AdminLayout>} />
         <Route path="/admin/notes"    element={<AdminLayout><AdminNotes /></AdminLayout>} />
-        <Route path="/admin/payments" element={<AdminLayout><AdminPayments /></AdminLayout>} />
+        <Route path="/admin/payments"  element={<AdminLayout><AdminPayments /></AdminLayout>} />
+        <Route path="/admin/settings"  element={<AdminLayout><AdminSettings /></AdminLayout>} />
 
         {/* Teacher */}
         <Route path="/teacher"          element={<TeacherLayout><TeacherOverview /></TeacherLayout>} />

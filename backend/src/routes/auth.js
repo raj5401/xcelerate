@@ -5,7 +5,7 @@ const { pool } = require('../db')
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
-  const { name, email, phone, password } = req.body
+  const { name, email, phone, password, role, subject } = req.body
   if (!name || !email || !password)
     return res.status(400).json({ message: 'Name, email and password required' })
   try {
@@ -14,9 +14,11 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ message: 'Email already registered' })
 
     const hash = await bcrypt.hash(password, 10)
+    // Only allow teacher/admin role if explicitly set (admin creating teacher accounts)
+    const userRole = (role === 'teacher' || role === 'admin') ? role : 'student'
     const result = await pool.query(
-      'INSERT INTO users (name,email,phone,password) VALUES ($1,$2,$3,$4) RETURNING id,name,email,phone,role,status',
-      [name, email, phone || null, hash]
+      'INSERT INTO users (name,email,phone,password,role,subject) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id,name,email,phone,role,status,subject',
+      [name, email, phone || null, hash, userRole, subject || null]
     )
     const user  = result.rows[0]
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' })
